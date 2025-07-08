@@ -1,16 +1,20 @@
 import copy
 import os
+from unittest.mock import MagicMock
+from unittest.mock import patch
 
 import jinja2.exceptions
 import pytest
 
-import salt.modules.suse_ip as suse_ip
-from tests.support.mock import MagicMock, patch
+from saltext.suse_ip.modules import suse_ip
 
 
 @pytest.fixture
 def configure_loader_modules():
     return {suse_ip: {"__grains__": {"os_family": "Suse"}}}
+
+
+setattr(configure_loader_modules, "_pytestfixturefunction", True)
 
 
 def test_error_message_iface_should_process_non_str_expected():
@@ -37,9 +41,7 @@ def test_build_interface():
         with pytest.raises(AttributeError):
             suse_ip.build_interface("iface", "slave", True)
 
-        with patch.dict(
-            suse_ip.__salt__, {"network.interfaces": lambda: {"eth": True}}
-        ):
+        with patch.dict(suse_ip.__salt__, {"network.interfaces": lambda: {"eth": True}}):
             with pytest.raises(AttributeError):
                 suse_ip.build_interface(
                     "iface",
@@ -66,8 +68,9 @@ def test_build_interface():
                     test=True,
                 )
 
-    with patch.object(suse_ip, "_raise_error_iface", return_value=None), patch.object(
-        suse_ip, "_parse_settings_bond", MagicMock()
+    with (
+        patch.object(suse_ip, "_raise_error_iface", return_value=None),
+        patch.object(suse_ip, "_parse_settings_bond", MagicMock()),
     ):
         mock = jinja2.exceptions.TemplateNotFound("foo")
         with patch.object(
@@ -77,15 +80,16 @@ def test_build_interface():
         ):
             assert suse_ip.build_interface("iface", "vlan", True) == ""
 
-        with patch.object(
-            suse_ip, "_get_non_blank_lines", return_value="A"
-        ), patch.object(jinja2.Environment, "get_template", MagicMock()):
+        with (
+            patch.object(suse_ip, "_get_non_blank_lines", return_value="A"),
+            patch.object(jinja2.Environment, "get_template", MagicMock()),
+        ):
             assert suse_ip.build_interface("iface", "vlan", True, test="A") == "A"
 
-            with patch.object(
-                suse_ip, "_write_file_iface", return_value=None
-            ), patch.object(os.path, "join", return_value="A"), patch.object(
-                suse_ip, "_read_file", return_value="A"
+            with (
+                patch.object(suse_ip, "_write_file_iface", return_value=None),
+                patch.object(os.path, "join", return_value="A"),
+                patch.object(suse_ip, "_read_file", return_value="A"),
             ):
                 assert suse_ip.build_interface("iface", "vlan", True) == "A"
                 with patch.dict(
@@ -118,9 +122,7 @@ def test_build_routes():
     """
     with patch.object(suse_ip, "_parse_routes", MagicMock()):
         mock = jinja2.exceptions.TemplateNotFound("foo")
-        with patch.object(
-            jinja2.Environment, "get_template", MagicMock(side_effect=mock)
-        ):
+        with patch.object(jinja2.Environment, "get_template", MagicMock(side_effect=mock)):
             assert suse_ip.build_routes("iface") == ""
 
         with patch.object(jinja2.Environment, "get_template", MagicMock()):
@@ -128,8 +130,9 @@ def test_build_routes():
                 assert suse_ip.build_routes("i", test="t") == ["A"]
 
             with patch.object(suse_ip, "_read_file", return_value=["A"]):
-                with patch.object(os.path, "join", return_value="A"), patch.object(
-                    suse_ip, "_write_file_network", return_value=None
+                with (
+                    patch.object(os.path, "join", return_value="A"),
+                    patch.object(suse_ip, "_write_file_network", return_value=None),
                 ):
                     assert suse_ip.build_routes("i", test=None) == ["A"]
 
@@ -148,8 +151,9 @@ def test_get_interface():
     """
     Test to return the contents of an interface script
     """
-    with patch.object(os.path, "join", return_value="A"), patch.object(
-        suse_ip, "_read_file", return_value="A"
+    with (
+        patch.object(os.path, "join", return_value="A"),
+        patch.object(suse_ip, "_read_file", return_value="A"),
     ):
         assert suse_ip.get_interface("iface") == "A"
 
@@ -162,9 +166,7 @@ def test__parse_settings_eth_hwaddr_and_macaddr():
     opts = {"hwaddr": 1, "macaddr": 2}
 
     with pytest.raises(AttributeError):
-        suse_ip._parse_settings_eth(
-            opts=opts, iface_type="eth", enabled=True, iface="eth0"
-        )
+        suse_ip._parse_settings_eth(opts=opts, iface_type="eth", enabled=True, iface="eth0")
 
 
 def test__parse_settings_eth_hwaddr():
@@ -198,8 +200,9 @@ def test__parse_settings_eth_ethtool_channels():
     Make sure channels gets added when parsing opts
     """
     opts = {"channels": {"rx": 4, "tx": 4, "combined": 4, "other": 4}}
-    with patch.dict(suse_ip.__grains__, {"num_cpus": 4}), patch.dict(
-        suse_ip.__salt__, {"network.interfaces": MagicMock()}
+    with (
+        patch.dict(suse_ip.__grains__, {"num_cpus": 4}),
+        patch.dict(suse_ip.__salt__, {"network.interfaces": MagicMock()}),
     ):
         results = suse_ip._parse_settings_eth(
             opts=opts, iface_type="eth", enabled=True, iface="eth0"
@@ -222,8 +225,9 @@ def test_get_routes():
     """
     Test to return the contents of the interface routes script.
     """
-    with patch.object(os.path, "join", return_value="A"), patch.object(
-        suse_ip, "_read_file", return_value=["A"]
+    with (
+        patch.object(os.path, "join", return_value="A"),
+        patch.object(suse_ip, "_read_file", return_value=["A"]),
     ):
         assert suse_ip.get_routes("iface") == ["A"]
 
@@ -248,25 +252,26 @@ def test_build_network_settings():
     """
     Test to build the global network script.
     """
-    with patch.object(suse_ip, "_parse_suse_config", MagicMock()), patch.object(
-        suse_ip, "_parse_network_settings", MagicMock()
+    with (
+        patch.object(suse_ip, "_parse_suse_config", MagicMock()),
+        patch.object(suse_ip, "_parse_network_settings", MagicMock()),
     ):
 
         mock = jinja2.exceptions.TemplateNotFound("foo")
-        with patch.object(
-            jinja2.Environment, "get_template", MagicMock(side_effect=mock)
-        ):
+        with patch.object(jinja2.Environment, "get_template", MagicMock(side_effect=mock)):
             assert suse_ip.build_network_settings() == ""
 
-        with patch.object(
-            jinja2.Environment, "get_template", MagicMock()
-        ), patch.object(suse_ip, "_get_non_blank_lines", return_value="A"):
+        with (
+            patch.object(jinja2.Environment, "get_template", MagicMock()),
+            patch.object(suse_ip, "_get_non_blank_lines", return_value="A"),
+        ):
             assert suse_ip.build_network_settings(test="t") == "A"
 
             with patch.object(suse_ip, "_write_file_network", return_value=None):
                 cmd_run = MagicMock()
-                with patch.object(suse_ip, "_read_file", return_value="A"), patch.dict(
-                    suse_ip.__salt__, {"cmd.run": cmd_run}
+                with (
+                    patch.object(suse_ip, "_read_file", return_value="A"),
+                    patch.dict(suse_ip.__salt__, {"cmd.run": cmd_run}),
                 ):
                     assert suse_ip.build_network_settings(test=None) == "A"
                     cmd_run.assert_called_once_with("netconfig update -f")
@@ -309,7 +314,7 @@ def _validate_miimon_downdelay(kwargs):
     except AttributeError as exc:
         assert "multiple of miimon" in str(exc)
     else:
-        raise Exception("AttributeError was not raised")
+        raise AssertionError("AttributeError was not raised")
 
 
 def _validate_miimon_conf(kwargs, required=True):
@@ -335,7 +340,7 @@ def _validate_miimon_conf(kwargs, required=True):
         except AttributeError as exc:
             assert "miimon" in str(exc)
         else:
-            raise Exception("AttributeError was not raised")
+            raise AssertionError("AttributeError was not raised")
 
     _validate_miimon_downdelay(kwargs)
 
@@ -352,7 +357,7 @@ def _get_bonding_opts(kwargs):
     for line in results:
         if line.startswith("BONDING_MODULE_OPTS="):
             return sorted(line.split("=", 1)[-1].strip("'").split())
-    raise Exception("BONDING_MODULE_OPTS not found")
+    raise AssertionError("BONDING_MODULE_OPTS not found")
 
 
 def _test_mode_0_or_2(mode_num=0):
@@ -392,7 +397,7 @@ def _test_mode_0_or_2(mode_num=0):
         except AttributeError as exc:
             assert "miimon or arp_interval" in str(exc)
         else:
-            raise Exception("AttributeError was not raised")
+            raise AssertionError("AttributeError was not raised")
 
         kwargs["miimon"] = 100
         kwargs["downdelay"] = 200
@@ -501,7 +506,7 @@ def test_build_interface_bond_mode_2():
         except AttributeError as exc:
             assert "hashing-algorithm" in str(exc)
         else:
-            raise Exception("AttributeError was not raised")
+            raise AssertionError("AttributeError was not raised")
 
         # Correct the hashing algorithm and re-run
         kwargs["hashing-algorithm"] = "layer2"

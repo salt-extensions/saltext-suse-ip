@@ -10,7 +10,6 @@ import os
 
 import jinja2
 import jinja2.exceptions
-
 import salt.utils.files
 import salt.utils.stringutils
 import salt.utils.templates
@@ -20,12 +19,8 @@ from salt.exceptions import CommandExecutionError
 # Set up logging
 log = logging.getLogger(__name__)
 
-# Set up template environment
-JINJA = jinja2.Environment(
-    loader=jinja2.FileSystemLoader(
-        os.path.join(salt.utils.templates.TEMPLATE_DIRNAME, "suse_ip")
-    )
-)
+# Set up template environment lazily when you need to access it
+JINJA = None
 
 # Define the module's virtual name
 __virtualname__ = "ip"
@@ -84,6 +79,20 @@ def __virtual__():
     )
 
 
+def __init_jinja():
+    """
+    Init jinja global variable lazily to avoid instantiation at module level
+    """
+    # pylint: disable-next=global-statement
+    global JINJA
+    if not JINJA:
+        JINJA = jinja2.Environment(
+            loader=jinja2.FileSystemLoader(
+                os.path.join(salt.utils.templates.TEMPLATE_DIRNAME, "suse_ip")
+            )
+        )
+
+
 def _error_msg_iface(iface, option, expected):
     """
     Build an appropriate error message from a given option and
@@ -105,9 +114,7 @@ def _error_msg_routes(iface, option, expected):
 
 
 def _log_default_iface(iface, opt, value):
-    log.info(
-        "Using default option -- Interface: %s Option: %s Value: %s", iface, opt, value
-    )
+    log.info("Using default option -- Interface: %s Option: %s Value: %s", iface, opt, value)
 
 
 def _error_msg_network(option, expected):
@@ -203,9 +210,7 @@ def _parse_ethtool_opts(opts, iface):
             if option in opts["channels"]:
                 valid = range(1, __grains__["num_cpus"] + 1)
                 if opts["channels"][option] in valid:
-                    channels_params.append(
-                        "{} {}".format(option, opts["channels"][option])
-                    )
+                    channels_params.append("{} {}".format(option, opts["channels"][option]))
                 else:
                     _raise_error_iface(iface, opts["channels"][option], valid)
         if channels_params:
@@ -242,9 +247,7 @@ def _parse_settings_bond(opts, iface):
         log.info("Device: %s Bonding Mode: fault-tolerance (broadcast)", iface)
         return _parse_settings_bond_3(opts, iface)
     elif opts["mode"] in ("802.3ad", "4"):
-        log.info(
-            "Device: %s Bonding Mode: IEEE 802.3ad Dynamic link aggregation", iface
-        )
+        log.info("Device: %s Bonding Mode: IEEE 802.3ad Dynamic link aggregation", iface)
         return _parse_settings_bond_4(opts, iface)
     elif opts["mode"] in ("balance-tlb", "5"):
         log.info("Device: %s Bonding Mode: transmit load balancing", iface)
@@ -355,9 +358,7 @@ def _parse_settings_bond_0(opts, iface):
     bond.update(_parse_settings_arp(opts, iface))
 
     if "miimon" not in opts and "arp_interval" not in opts:
-        _raise_error_iface(
-            iface, "miimon or arp_interval", "at least one of these is required"
-        )
+        _raise_error_iface(iface, "miimon or arp_interval", "at least one of these is required")
 
     return bond
 
@@ -389,9 +390,7 @@ def _parse_settings_bond_2(opts, iface):
     bond.update(_parse_settings_arp(opts, iface))
 
     if "miimon" not in opts and "arp_interval" not in opts:
-        _raise_error_iface(
-            iface, "miimon or arp_interval", "at least one of these is required"
-        )
+        _raise_error_iface(iface, "miimon or arp_interval", "at least one of these is required")
 
     if "hashing-algorithm" in opts:
         valid = ("layer2", "layer2+3", "layer3+4")
@@ -658,9 +657,7 @@ def _parse_settings_eth(opts, iface_type, enabled, iface):
         result["ipaddrs"] = []
     if "ipaddrs" in opts:
         for opt in opts["ipaddrs"]:
-            if salt.utils.validate.net.ipv4_addr(
-                opt
-            ) or salt.utils.validate.net.ipv6_addr(opt):
+            if salt.utils.validate.net.ipv4_addr(opt) or salt.utils.validate.net.ipv6_addr(opt):
                 result["ipaddrs"].append(opt)
             else:
                 msg = f"{opt} is invalid ipv4 or ipv6 CIDR"
@@ -935,6 +932,8 @@ def build_interface(iface, iface_type, enabled, **settings):
 
         salt '*' ip.build_interface eth0 eth <settings>
     """
+    __init_jinja()
+    ifcfg = None
     iface_type = iface_type.lower()
 
     if iface_type not in _IFACE_TYPES:
@@ -1009,6 +1008,7 @@ def build_routes(iface, **settings):
         salt '*' ip.build_routes eth0 <settings>
     """
 
+    __init_jinja()
     template = "ifroute.jinja"
     log.debug("Template name: %s", template)
 
@@ -1231,6 +1231,7 @@ def build_network_settings(**settings):
 
         salt '*' ip.build_network_settings <settings>
     """
+    __init_jinja()
     # Read current configuration and store default values
     current_network_settings = _parse_suse_config(_SUSE_NETWORK_FILE)
 
