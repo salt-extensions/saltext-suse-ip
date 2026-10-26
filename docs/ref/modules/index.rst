@@ -1,4 +1,4 @@
-.. all-saltext.suse-ip.modules:
+.. all-saltext.suse_ip.modules:
 
 _________________
 Execution Modules
